@@ -126,7 +126,9 @@ async def diagnose_leaf_image(
     )
     predicted_index = ml_service.class_names.index(predicted_label)
 
-    heatmap_jet_bytes, heatmap_overlay_bytes = ml_service.compute_grad_cam(image_tensor, predicted_index)
+    heatmap_jet_bytes, heatmap_overlay_bytes = ml_service.compute_grad_cam(
+        image_tensor, predicted_index, image_bytes
+    )
 
     image_url = await storage_service.upload_image(
         file_bytes=image_bytes, content_type=content_type, user_id=str(current_user.id)

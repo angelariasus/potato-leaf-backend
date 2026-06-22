@@ -153,7 +153,10 @@ class MLInferenceService:
         return predicted_label, confidence_score, probability_map
 
     def compute_grad_cam(
-        self, image_tensor: tf.Tensor, predicted_index: int
+        self, 
+        image_tensor: tf.Tensor, 
+        predicted_index: int,
+        original_image_bytes: bytes = None
     ) -> tuple[bytes, bytes]:
         """
         Calcula el mapa de activación Grad-CAM puro en TensorFlow para la
@@ -212,12 +215,21 @@ class MLInferenceService:
         if max_value > 0:
             heatmap = heatmap / max_value
 
-        # Escalar el heatmap nativamente con TensorFlow para generar
-        # la superposición (overlay) en la misma resolución original.
+        # Determinar la resolución objetivo (original o 224x224 por defecto)
+        if original_image_bytes:
+            pil_orig = Image.open(io.BytesIO(original_image_bytes)).convert("RGB")
+            orig_w, orig_h = pil_orig.size
+            target_size = (orig_h, orig_w)
+            img_normalized = np.asarray(pil_orig, dtype=np.float32) / 255.0
+        else:
+            target_size = (self.input_size, self.input_size)
+            img_normalized = image_tensor[0].numpy() / 255.0
+
+        # Escalar el heatmap nativamente con TensorFlow hacia la resolución original
         heatmap_expanded = tf.expand_dims(tf.expand_dims(heatmap, 0), -1)
         heatmap_resized = tf.image.resize(
             heatmap_expanded, 
-            (self.input_size, self.input_size), 
+            target_size, 
             method=tf.image.ResizeMethod.BILINEAR
         )
         heatmap_final = tf.squeeze(heatmap_resized).numpy()
@@ -230,7 +242,7 @@ class MLInferenceService:
         jet_palette = (np.stack([r_pal, g_pal, b_pal], axis=-1) * 255).astype(np.uint8)
 
         indices = (heatmap_final * 255).astype(np.uint8)
-        heatmap_colored = jet_palette[indices] # [224, 224, 3] RGB
+        heatmap_colored = jet_palette[indices] # RGB uint8 de alta resolución
 
         # Retornar los bytes directamente
         pil_jet = Image.fromarray(heatmap_colored, mode="RGB")
@@ -239,8 +251,6 @@ class MLInferenceService:
         jet_bytes = buffered_jet.getvalue()
 
         # 2. Generar el Overlay (mezcla de la imagen original y el heatmap)
-        # image_tensor tiene valores en [0, 255], lo normalizamos a [0, 1]
-        img_normalized = image_tensor[0].numpy() / 255.0
         heatmap_colored_norm = heatmap_colored.astype(np.float32) / 255.0
         
         overlay = np.clip((img_normalized * 0.6 + heatmap_colored_norm * 0.4), 0, 1)
