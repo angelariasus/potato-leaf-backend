@@ -78,16 +78,30 @@ def decode_access_token(token: str) -> str:
 def verify_google_id_token(token: str) -> dict[str, Any]:
     """
     Verifica criptográficamente un ID Token de Google OAuth2 contra los
-    servidores de Google, validando firma, emisor (`iss`) y audiencia
-    (`aud`) frente al `GOOGLE_CLIENT_ID` configurado.
+    servidores de Google, validando firma y caducidad. Posteriormente
+    valida la audiencia (`aud`) contra todos los `GOOGLE_CLIENT_ID`
+    configurados (permitiendo soporte simultáneo para Web, iOS y Android).
 
     Retorna el payload decodificado, que contiene como mínimo `email`,
     `name` y `sub` (identificador único de la cuenta de Google).
     """
     try:
+        # Verificar firma y caducidad delegando en la librería de Google,
+        # pero omitimos la validación estricta de audiencia única por ahora.
         id_info = google_id_token.verify_oauth2_token(
-            token, google_requests.Request(), audience=settings.GOOGLE_CLIENT_ID
+            token, google_requests.Request(), audience=None
         )
+
+        # Validación manual de múltiples audiencias (Client IDs)
+        valid_audiences = settings.google_client_ids_list
+        if valid_audiences:
+            token_aud = id_info.get("aud")
+            if token_aud not in valid_audiences:
+                raise ValueError(
+                    f"El Client ID del token ({token_aud}) no coincide con "
+                    f"ninguno de los clientes permitidos en el backend."
+                )
+
         return id_info
     except ValueError as exc:
         raise HTTPException(

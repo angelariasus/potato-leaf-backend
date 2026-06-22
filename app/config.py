@@ -109,6 +109,13 @@ class Settings(BaseSettings):
         """Convierte los orígenes CORS separados por comas en una lista de Python."""
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    @property
+    def google_client_ids_list(self) -> list[str]:
+        """Convierte los Google Client IDs separados por comas en una lista."""
+        if not self.GOOGLE_CLIENT_ID:
+            return []
+        return [c.strip() for c in self.GOOGLE_CLIENT_ID.split(",") if c.strip()]
+
 
 @lru_cache()
 def get_settings() -> Settings:
