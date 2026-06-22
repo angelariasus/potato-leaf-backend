@@ -116,13 +116,7 @@ class UserProfileUpdateRequest(BaseModel):
 # ----------------------------------------------------------------------
 # Esquemas de Diagnóstico (CNN + Grad-CAM)
 # ----------------------------------------------------------------------
-class GradCamMatrix(BaseModel):
-    """Representación serializable de la matriz de activación Grad-CAM."""
-
-    size: int = Field(..., description="Dimensión N de la matriz N x N")
-    matrix: list[list[float]] = Field(
-        ..., description="Matriz de activación normalizada en el rango [0.0, 1.0]"
-    )
+# Se elimina GradCamMatrix, ahora se envía un PNG Base64
 
 
 class DiagnoseResponse(BaseModel):
@@ -132,7 +126,7 @@ class DiagnoseResponse(BaseModel):
     diagnostic_result: DiagnosticResultSchema
     confidence_score: float = Field(..., ge=0.0, le=1.0)
     probabilities: dict[str, float]
-    grad_cam: GradCamMatrix
+    heatmap_image: str = Field(..., description="Imagen PNG transparente codificada en Base64")
     image_url: str
     location_lat: float
     location_lon: float

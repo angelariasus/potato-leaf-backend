@@ -151,9 +151,7 @@ async def diagnose_leaf_image(
         diagnostic_result=predicted_label,
         confidence_score=confidence_score,
         probabilities=probability_map,
-        grad_cam=GradCamMatrix(
-            size=len(grad_cam_matrix), matrix=grad_cam_matrix
-        ),
+        heatmap_image=grad_cam_matrix,
         image_url=image_url,
         location_lat=lat,
         location_lon=lon,

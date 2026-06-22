@@ -11,6 +11,7 @@ convolucional, sin dependencias de librerías de terceros externas a
 TensorFlow para el cálculo de gradientes.
 """
 
+import base64
 import io
 import logging
 
@@ -153,7 +154,7 @@ class MLInferenceService:
 
     def compute_grad_cam(
         self, image_tensor: tf.Tensor, predicted_index: int
-    ) -> list[list[float]]:
+    ) -> str:
         """
         Calcula el mapa de activación Grad-CAM puro en TensorFlow para la
         clase predicha, interceptando los gradientes de la última capa
@@ -211,20 +212,37 @@ class MLInferenceService:
         if max_value > 0:
             heatmap = heatmap / max_value
 
-        # Escalar el heatmap nativamente con TensorFlow para devolver 
-        # una matriz ampliada (224x224), a petición del cliente web.
+        # Escalar el heatmap nativamente con TensorFlow para generar
+        # la superposición (overlay) en la misma resolución original.
         heatmap_expanded = tf.expand_dims(tf.expand_dims(heatmap, 0), -1)
         heatmap_resized = tf.image.resize(
             heatmap_expanded, 
             (self.input_size, self.input_size), 
             method=tf.image.ResizeMethod.BILINEAR
         )
-        heatmap_final = tf.squeeze(heatmap_resized)
+        heatmap_final = tf.squeeze(heatmap_resized).numpy()
 
-        heatmap_array = heatmap_final.numpy().astype(float)
-        # Se reduce la precisión a 4 decimales para no inflar excesivamente
-        # el peso en KB del JSON de respuesta.
-        return [[round(float(value), 4) for value in row] for row in heatmap_array]
+        # Generar un mapa de calor RGBA (Amarillo -> Naranja -> Rojo)
+        # R = 255 (siempre saturado en rojo)
+        # G = Decae hacia 0 a medida que aumenta la intensidad (R+G = Amarillo, R solo = Rojo)
+        # B = 0
+        # A = Opacidad ligada a la intensidad (totalmente transparente donde hay 0)
+        r = np.full_like(heatmap_final, 255, dtype=np.uint8)
+        g = np.clip((1.0 - heatmap_final) * 2.0 * 255.0, 0, 255).astype(np.uint8)
+        b = np.zeros_like(heatmap_final, dtype=np.uint8)
+        
+        # Opacidad máxima del 75% (190/255) para dejar ver la hoja original de fondo
+        a = (heatmap_final * 190).astype(np.uint8)
+
+        rgba_image = np.stack([r, g, b, a], axis=-1)
+        pil_img = Image.fromarray(rgba_image, mode="RGBA")
+
+        # Convertir a Base64 PNG
+        buffered = io.BytesIO()
+        pil_img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        
+        return f"data:image/png;base64,{img_str}"
 
 
 def build_ml_service() -> MLInferenceService:
