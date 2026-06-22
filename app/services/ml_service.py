@@ -173,7 +173,7 @@ class MLInferenceService:
         # Construir un sub-modelo que exponga simultáneamente la salida
         # de la capa convolucional y la predicción final.
         grad_model = tf.keras.models.Model(
-            inputs=[self.model.inputs],
+            inputs=self.model.inputs,
             outputs=[
                 self.model.get_layer(self.last_conv_layer_name).output,
                 self.model.output,
