@@ -154,7 +154,7 @@ class MLInferenceService:
 
     def compute_grad_cam(
         self, image_tensor: tf.Tensor, predicted_index: int
-    ) -> tuple[str, str]:
+    ) -> tuple[bytes, bytes]:
         """
         Calcula el mapa de activación Grad-CAM puro en TensorFlow para la
         clase predicha, interceptando los gradientes de la última capa
@@ -232,11 +232,11 @@ class MLInferenceService:
         indices = (heatmap_final * 255).astype(np.uint8)
         heatmap_colored = jet_palette[indices] # [224, 224, 3] RGB
 
-        # Convertir Jet a Base64 JPEG
+        # Retornar los bytes directamente
         pil_jet = Image.fromarray(heatmap_colored, mode="RGB")
         buffered_jet = io.BytesIO()
         pil_jet.save(buffered_jet, format="JPEG", quality=85)
-        jet_b64 = base64.b64encode(buffered_jet.getvalue()).decode("utf-8")
+        jet_bytes = buffered_jet.getvalue()
 
         # 2. Generar el Overlay (mezcla de la imagen original y el heatmap)
         # image_tensor tiene valores en [0, 255], lo normalizamos a [0, 1]
@@ -249,9 +249,9 @@ class MLInferenceService:
         pil_overlay = Image.fromarray(overlay_uint8, mode="RGB")
         buffered_overlay = io.BytesIO()
         pil_overlay.save(buffered_overlay, format="JPEG", quality=85)
-        overlay_b64 = base64.b64encode(buffered_overlay.getvalue()).decode("utf-8")
+        overlay_bytes = buffered_overlay.getvalue()
         
-        return f"data:image/jpeg;base64,{jet_b64}", f"data:image/jpeg;base64,{overlay_b64}"
+        return jet_bytes, overlay_bytes
 
 
 def build_ml_service() -> MLInferenceService:

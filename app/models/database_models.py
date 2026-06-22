@@ -154,6 +154,8 @@ class QueryHistory(Base):
         index=True,
     )
     image_url: Mapped[str] = mapped_column(Text, nullable=False)
+    heatmap_jet_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    heatmap_overlay_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnostic_result: Mapped[DiagnosticResultEnum] = mapped_column(
         Enum(DiagnosticResultEnum, name="diagnostic_result_enum", native_enum=True),
         nullable=False,
