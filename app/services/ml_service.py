@@ -39,8 +39,6 @@ class MLInferenceService:
         self.class_names = class_names
         self.input_size = input_size
         self.model: tf.keras.Model | None = None
-        self.sub_model: tf.keras.Model | None = None
-        self.classifier_layers: list[tf.keras.layers.Layer] = []
         self.last_conv_layer_name: str | None = None
 
     def load_model(self) -> None:
@@ -75,15 +73,7 @@ class MLInferenceService:
             tf.keras.layers.Layer.__init__ = original_layer_init
 
         self.last_conv_layer_name = self._resolve_last_conv_layer()
-        last_conv_layer = self.model.get_layer(self.last_conv_layer_name)
 
-        self.sub_model = tf.keras.models.Model(
-            inputs=self.model.inputs,
-            outputs=last_conv_layer.output,
-        )
-        
-        layer_idx = self.model.layers.index(last_conv_layer)
-        self.classifier_layers = self.model.layers[layer_idx + 1:]
         logger.info(
             "Modelo cargado exitosamente. Última capa convolucional detectada: %s",
             self.last_conv_layer_name,
@@ -175,16 +165,25 @@ class MLInferenceService:
         normaliza el resultado al rango [0.0, 1.0] para su consumo directo
         por el frontend como una superposición de calor (heatmap).
         """
-        if self.sub_model is None:
-            raise RuntimeError("El sub_model no ha sido inicializado.")
+        if self.model is None or self.last_conv_layer_name is None:
+            raise RuntimeError("El modelo no ha sido inicializado.")
 
         with tf.GradientTape() as tape:
-            conv_outputs = self.sub_model(image_tensor, training=False)
-            tape.watch(conv_outputs)
+            x = image_tensor
+            conv_outputs = None
             
-            x = conv_outputs
-            for layer in self.classifier_layers:
+            for layer in self.model.layers:
+                if isinstance(layer, tf.keras.layers.InputLayer):
+                    continue
+                
                 x = layer(x, training=False)
+                
+                if layer.name == self.last_conv_layer_name:
+                    conv_outputs = x
+                    tape.watch(conv_outputs)
+            
+            if conv_outputs is None:
+                raise RuntimeError(f"No se encontró la capa convolucional {self.last_conv_layer_name} durante el forward pass.")
             
             predictions = x
             class_channel = predictions[:, predicted_index]
