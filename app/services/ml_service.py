@@ -224,6 +224,10 @@ class MLInferenceService:
         # Determinar la resolución objetivo (original o 224x224 por defecto)
         if original_image_bytes:
             pil_orig = Image.open(io.BytesIO(original_image_bytes)).convert("RGB")
+            # Limitar la resolución máxima para evitar OOM (Out Of Memory) con fotos móviles
+            max_dim = 1024
+            if pil_orig.width > max_dim or pil_orig.height > max_dim:
+                pil_orig.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
             orig_w, orig_h = pil_orig.size
             target_size = (orig_h, orig_w)
             img_normalized = np.asarray(pil_orig, dtype=np.float32) / 255.0
