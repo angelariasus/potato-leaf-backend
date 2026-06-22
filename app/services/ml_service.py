@@ -170,18 +170,24 @@ class MLInferenceService:
         if self.model is None or self.last_conv_layer_name is None:
             raise RuntimeError("El modelo no ha sido inicializado.")
 
-        # Construir un sub-modelo que exponga simultáneamente la salida
-        # de la capa convolucional y la predicción final.
-        grad_model = tf.keras.models.Model(
-            inputs=self.model.inputs,
-            outputs=[
-                self.model.get_layer(self.last_conv_layer_name).output,
-                self.model.output,
-            ],
-        )
-
         with tf.GradientTape() as tape:
-            conv_outputs, predictions = grad_model(image_tensor, training=False)
+            x = image_tensor
+            conv_outputs = None
+            
+            for layer in self.model.layers:
+                if isinstance(layer, tf.keras.layers.InputLayer):
+                    continue
+                
+                x = layer(x, training=False)
+                
+                if layer.name == self.last_conv_layer_name:
+                    conv_outputs = x
+                    tape.watch(conv_outputs)
+            
+            if conv_outputs is None:
+                raise RuntimeError(f"No se encontró la capa convolucional {self.last_conv_layer_name} durante el forward pass.")
+            
+            predictions = x
             class_channel = predictions[:, predicted_index]
 
         gradients = tape.gradient(class_channel, conv_outputs)
